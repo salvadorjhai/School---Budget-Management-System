@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --sidebar: #0f172a;
+      --page: #f8fafc;
+      --border: #e2e8f0;
+      --muted: #64748b;
+    }
+    body { background: var(--page); font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; color: #0f172a; }
+    .sidebar { min-height: 100vh; background: var(--sidebar); color: white; position: sticky; top: 0; }
+    .brand { min-height: 68px; display: flex; align-items: center; }
+    .nav-link { color: #94a3b8; padding: 12px 16px; font-weight: 600; border-radius: 8px; margin: 3px 10px; cursor: pointer; }
+    .nav-link:hover, .nav-link.active { background: #1e293b; color: #38bdf8; }
+    .card-custom { border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 1px 2px rgba(15,23,42,.04); background: #fff; }
+    .kpi-label { color: var(--muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
+    .kpi-value { font-size: 1.65rem; font-weight: 750; margin: 4px 0 0; }
+    .section-view { display: none; }
+    .table { margin-bottom: 0; }
+    .table thead th { white-space: nowrap; font-size: .78rem; text-transform: uppercase; color: #475569; background: #f8fafc; border-bottom-width: 1px; }
+    .table td { vertical-align: middle; }
+    .audit-cell { min-width: 150px; color: #64748b; font-size: .8rem; }
+    .money { white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .chart-wrap { position: relative; min-height: 310px; }
+    .summary-table td:last-child, .summary-table th:last-child { text-align: right; }
+    .summary-table td:nth-child(2), .summary-table th:nth-child(2) { text-align: right; }
+    .page-title { font-weight: 750; }
+    .loading-cover { position: fixed; inset: 0; background: rgba(248,250,252,.72); z-index: 2000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(1px); }
+    .empty-row { color: #94a3b8; text-align: center; padding: 28px !important; }
+    .user-panel { border-top: 1px solid rgba(148,163,184,.25); color:#cbd5e1; font-size:.78rem; }
+    .user-email { word-break: break-all; }
+    .permission-badge { font-size:.72rem; }
+    .category-entry-row td { vertical-align: top; }
+    .category-entry-row .form-control { min-width: 180px; }
+    .category-entry-actions { width: 52px; text-align: center; }
+    @media (max-width: 767.98px) {
+      .sidebar { min-height: auto; position: static; }
+      .sidebar .nav { flex-direction: row !important; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 8px; }
+      .sidebar .nav-link { white-space: nowrap; }
+    }
+  </style>
+</head>
+<body>
+<div id="loadingCover" class="loading-cover">
+  <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+</div>
+
+<div class="container-fluid">
+  <div class="row">
+    <aside class="col-md-2 sidebar p-0">
+      <div class="brand px-3 border-bottom border-secondary">
+        <h5 class="m-0 fw-bold"><i class="bi bi-wallet2 me-2"></i>Bularit ES</h5>
+      </div>
+      <ul class="nav flex-column my-3">
+        <li class="nav-item"><a class="nav-link active" data-tab="dashboardTab" onclick="switchTab('dashboardTab', this)"><i class="bi bi-grid-1x2 me-2"></i>Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link" data-tab="projectsTab" onclick="switchTab('projectsTab', this)"><i class="bi bi-folder me-2"></i>Projects</a></li>
+        <li class="nav-item"><a class="nav-link" data-tab="categoriesTab" onclick="switchTab('categoriesTab', this)"><i class="bi bi-tags me-2"></i>Categories</a></li>
+        <li class="nav-item"><a class="nav-link" data-tab="transactionsTab" onclick="switchTab('transactionsTab', this)"><i class="bi bi-receipt me-2"></i>Transactions</a></li>
+        <li id="usersNavItem" class="nav-item d-none"><a class="nav-link" data-tab="usersTab" onclick="switchTab('usersTab', this)"><i class="bi bi-people me-2"></i>Users List</a></li>
+      </ul>
+      <div class="user-panel mt-auto p-3">
+        <div class="text-secondary mb-1">Signed in as</div>
+        <div id="currentUserEmail" class="user-email fw-semibold text-white">—</div>
+        <div id="currentUserAccess" class="mt-2"><span class="badge text-bg-secondary permission-badge">Loading…</span></div>
+      </div>
+    </aside>
+
+    <main class="col-md-10 p-3 p-lg-4">
+      <div id="appStatus" class="alert alert-info py-2 px-3 small mb-3" role="alert">Loading budget data…</div>
+      <!-- DASHBOARD -->
+      <section id="dashboardTab" class="section-view" style="display:block;">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+          <div>
+            <h4 class="page-title mb-1">Dashboard</h4>
+            <div class="text-secondary small">Project funding, expenses, cash balance, and category summaries</div>
+          </div>
+          <select id="dashProjectSlicer" class="form-select" style="max-width:320px" onchange="renderDashboard()"></select>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-sm-6 col-xl-3"><div class="card-custom p-3 h-100"><div class="kpi-label">Amount Goal</div><div id="kpiGoal" class="kpi-value">₱0.00</div></div></div>
+          <div class="col-sm-6 col-xl-3"><div class="card-custom p-3 h-100"><div class="kpi-label">Total Income</div><div id="kpiIncome" class="kpi-value text-success">₱0.00</div></div></div>
+          <div class="col-sm-6 col-xl-3"><div class="card-custom p-3 h-100"><div class="kpi-label">Total Expenses</div><div id="kpiExpenses" class="kpi-value text-danger">₱0.00</div></div></div>
+          <div class="col-sm-6 col-xl-3"><div class="card-custom p-3 h-100"><div class="kpi-label">Available Balance</div><div id="kpiBalance" class="kpi-value text-primary">₱0.00</div></div></div>
+        </div>
+
+        <div class="card-custom p-3 mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div><strong>Income toward project goal</strong><div id="goalProgressText" class="small text-secondary"></div></div>
+            <span id="goalProgressPercent" class="badge text-bg-light">0%</span>
+          </div>
+          <div class="progress" role="progressbar" style="height:10px"><div id="goalProgressBar" class="progress-bar" style="width:0%"></div></div>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-xl-6"><div class="card-custom p-3 h-100"><h6 class="fw-bold mb-3">Monthly Cash Flow</h6><div class="chart-wrap"><canvas id="cashFlowChart"></canvas></div></div></div>
+          <div class="col-xl-3 col-md-6"><div class="card-custom p-3 h-100"><h6 class="fw-bold mb-3">Income by Category</h6><div class="chart-wrap"><canvas id="incomeCategoryChart"></canvas></div></div></div>
+          <div class="col-xl-3 col-md-6"><div class="card-custom p-3 h-100"><h6 class="fw-bold mb-3">Expenses by Category</h6><div class="chart-wrap"><canvas id="expenseCategoryChart"></canvas></div></div></div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-xl-6">
+            <div class="card-custom p-3 h-100">
+              <h6 class="fw-bold mb-3">Income Summary per Category</h6>
+              <div class="table-responsive"><table class="table table-sm summary-table"><thead><tr><th>Category</th><th>Amount</th><th>%</th></tr></thead><tbody id="incomeSummaryBody"></tbody></table></div>
+            </div>
+          </div>
+          <div class="col-xl-6">
+            <div class="card-custom p-3 h-100">
+              <h6 class="fw-bold mb-3">Expense Summary per Category</h6>
+              <div class="table-responsive"><table class="table table-sm summary-table"><thead><tr><th>Category</th><th>Amount</th><th>%</th></tr></thead><tbody id="expenseSummaryBody"></tbody></table></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PROJECTS -->
+      <section id="projectsTab" class="section-view">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div><h4 class="page-title mb-1">Projects</h4><div class="text-secondary small">Project master list and optional funding goal</div></div>
+          <button id="btnAddProject" class="btn btn-primary btn-sm" onclick="openProjectModal()"><i class="bi bi-plus-lg me-1"></i>Add Project</button>
+        </div>
+        <div class="card-custom p-3">
+          <div class="table-responsive">
+            <table class="table table-hover">
+              <thead><tr><th>ID</th><th>Project</th><th>Amount Goal</th><th>Created</th><th>Created By</th><th>Updated</th><th>Updated By</th><th>Actions</th></tr></thead>
+              <tbody id="projectsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- CATEGORIES -->
+      <section id="categoriesTab" class="section-view">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div><h4 class="page-title mb-1">Categories</h4><div class="text-secondary small">Categories belong to a project and define whether transactions are Income or Expense</div></div>
+          <button id="btnAddCategory" class="btn btn-primary btn-sm" onclick="openCategoryAddModal()"><i class="bi bi-plus-lg me-1"></i>Add Category</button>
+        </div>
+        <div class="card-custom p-3">
+          <div class="table-responsive">
+            <table class="table table-hover">
+              <thead><tr><th>ID</th><th>Project</th><th>Category</th><th>Flow Type</th><th>Description</th><th>Created</th><th>Created By</th><th>Updated</th><th>Updated By</th><th>Actions</th></tr></thead>
+              <tbody id="categoriesTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TRANSACTIONS -->
+      <section id="transactionsTab" class="section-view">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <div><h4 class="page-title mb-1">Transactions</h4><div class="text-secondary small">Income and expenses are combined here; destination sheet comes from Category Flow Type</div></div>
+          <button id="btnAddTransaction" class="btn btn-primary btn-sm" onclick="openTransactionModal()"><i class="bi bi-plus-lg me-1"></i>Add Transaction</button>
+        </div>
+        <div class="card-custom p-3 mb-3">
+          <div class="row g-2">
+            <div class="col-md-4"><select id="trxProjectFilter" class="form-select form-select-sm" onchange="renderTransactionsTable()"></select></div>
+            <div class="col-md-3"><select id="trxTypeFilter" class="form-select form-select-sm" onchange="renderTransactionsTable()"><option value="">All Types</option><option value="Income">Income</option><option value="Expense">Expense</option></select></div>
+            <div class="col-md-5"><input id="trxSearch" class="form-control form-control-sm" placeholder="Search category or remarks..." oninput="renderTransactionsTable()"></div>
+          </div>
+        </div>
+        <div class="card-custom p-3">
+          <div class="table-responsive">
+            <table class="table table-hover">
+              <thead><tr><th>Type</th><th>Project</th><th>Category</th><th>Date</th><th>Amount</th><th>Remarks</th><th>Created</th><th>Created By</th><th>Updated</th><th>Updated By</th><th>Actions</th></tr></thead>
+              <tbody id="transactionsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- AUTHORIZED USERS -->
+      <section id="usersTab" class="section-view">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div><h4 class="page-title mb-1">Users List</h4><div class="text-secondary small">Administrator-only access control for the internal budget tracker</div></div>
+          <button class="btn btn-primary btn-sm" onclick="openUserModal()"><i class="bi bi-person-plus me-1"></i>Add User</button>
+        </div>
+        <div class="card-custom p-3">
+          <div class="table-responsive">
+            <table class="table table-hover">
+              <thead><tr><th>Email</th><th>Add</th><th>Edit</th><th>Admin</th><th>Active</th><th>Created</th><th>Created By</th><th>Updated</th><th>Updated By</th><th>Actions</th></tr></thead>
+              <tbody id="usersTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- PROJECT MODAL -->
+<div class="modal fade" id="projectModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <form id="projectForm" onsubmit="handleProjectSave(event)">
+      <div class="modal-header"><h5 class="modal-title">Project Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <input type="hidden" id="projRowNum"><input type="hidden" id="projId">
+        <div class="mb-3"><label class="form-label">Project Title</label><input type="text" id="projTitle" class="form-control" maxlength="150" required></div>
+        <div class="mb-3"><label class="form-label">Amount Goal <span class="text-secondary">(Optional)</span></label><input type="number" min="0" step="0.01" id="projAmountGoal" class="form-control" placeholder="0.00"></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary">Save Project</button></div>
+    </form>
+  </div></div>
+</div>
+
+<!-- ADD CATEGORIES MODAL -->
+<div class="modal fade" id="categoryAddModal" tabindex="-1">
+  <div class="modal-dialog modal-lg"><div class="modal-content">
+    <form id="categoryAddForm" onsubmit="handleCategoryBatchSave(event)">
+      <div class="modal-header"><h5 class="modal-title">Add Categories</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="row g-3 mb-3">
+          <div class="col-md-7"><label class="form-label">Project</label><select id="catAddProjectId" class="form-select" required></select></div>
+          <div class="col-md-5"><label class="form-label">Flow Type</label><select id="catAddFlowType" class="form-select" required><option value="Expense">Expense</option><option value="Income">Income</option></select></div>
+        </div>
+        <div class="table-responsive border rounded">
+          <table class="table table-sm align-middle mb-0">
+            <thead><tr><th style="width:38%">Category</th><th>Description</th><th class="category-entry-actions"></th></tr></thead>
+            <tbody id="categoryBatchRows"></tbody>
+          </table>
+        </div>
+        <button type="button" class="btn btn-outline-secondary btn-sm mt-3" onclick="addCategoryEntryRow()"><i class="bi bi-plus-lg me-1"></i>Add Row</button>
+        <div class="form-text mt-2">Project and Flow Type apply to all rows in this batch.</div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary">Save All</button></div>
+    </form>
+  </div></div>
+</div>
+
+<!-- CATEGORY DETAILS MODAL (EDIT) -->
+<div class="modal fade" id="categoryModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <form id="categoryForm" onsubmit="handleCategorySave(event)">
+      <div class="modal-header"><h5 class="modal-title">Category Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <input type="hidden" id="catRowNum"><input type="hidden" id="catId">
+        <div class="mb-3"><label class="form-label">Project</label><select id="catProjectId" class="form-select" required></select></div>
+        <div class="mb-3"><label class="form-label">Category</label><input type="text" id="catTitle" class="form-control" maxlength="150" required></div>
+        <div class="mb-3"><label class="form-label">Flow Type</label><select id="catFlowType" class="form-select" required><option value="Expense">Expense</option><option value="Income">Income</option></select></div>
+        <div class="mb-3"><label class="form-label">Description</label><textarea id="catDescription" class="form-control" rows="2" maxlength="500"></textarea></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary">Save Category</button></div>
+    </form>
+  </div></div>
+</div>
+
+<!-- TRANSACTION MODAL -->
+<div class="modal fade" id="transactionModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <form id="transactionForm" onsubmit="handleTransactionSave(event)">
+      <div class="modal-header"><h5 class="modal-title">Transaction Record</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <input type="hidden" id="transRowNum"><input type="hidden" id="transSourceSheet"><input type="hidden" id="transId">
+        <div class="mb-3"><label class="form-label">Project</label><select id="transProjectId" class="form-select" onchange="filterTransactionCategories()" required></select></div>
+        <div class="mb-3"><label class="form-label">Category</label><select id="transCategoryId" class="form-select" required></select><div id="transFlowHint" class="form-text"></div></div>
+        <div class="mb-3"><label class="form-label">Date</label><input type="date" id="transDate" class="form-control" required></div>
+        <div class="mb-3"><label class="form-label">Amount (₱)</label><input type="number" min="0.01" step="0.01" id="transAmount" class="form-control" required></div>
+        <div class="mb-3"><label class="form-label">Remarks</label><input type="text" id="transRemarks" class="form-control" maxlength="500"></div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary">Save Transaction</button></div>
+    </form>
+  </div></div>
+</div>
+
+<!-- USER MODAL -->
+<div class="modal fade" id="userModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <form id="userForm" onsubmit="handleUserSave(event)">
+      <div class="modal-header"><h5 class="modal-title">Authorized User</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <input type="hidden" id="userRowNum">
+        <div class="mb-3"><label class="form-label">Google Account Email</label><input type="email" id="userEmail" class="form-control" required></div>
+        <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="userCanAdd"><label class="form-check-label" for="userCanAdd">Can Add records</label></div>
+        <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="userCanEdit"><label class="form-check-label" for="userCanEdit">Can Edit records</label></div>
+        <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" id="userIsAdmin"><label class="form-check-label" for="userIsAdmin">Administrator</label></div>
+        <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="userIsActive" checked><label class="form-check-label" for="userIsActive">Active</label></div>
+        <div class="form-text mt-3">Administrators automatically have Add and Edit access.</div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary">Save User</button></div>
+    </form>
+  </div></div>
+</div>
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="appToast" class="toast" role="alert"><div class="toast-header"><strong id="toastTitle" class="me-auto">Budget Tracker</strong><button type="button" class="btn-close" data-bs-dismiss="toast"></button></div><div id="toastBody" class="toast-body"></div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+let store = { projects: [], categories: [], expenses: [], income: [], currentUser: null, authorizedUsers: [] };
+let currentUser = { email:'', can_add:false, can_edit:false, is_admin:false, is_active:false };
+let charts = {};
+
+window.addEventListener('load', loadData);
+document.getElementById('transCategoryId').addEventListener('change', updateTransactionFlowHint);
+
+function loadData() {
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(data => {
+      store = data || { projects: [], categories: [], expenses: [], income: [], currentUser: null, authorizedUsers: [] };
+      currentUser = store.currentUser || { email:'', can_add:false, can_edit:false, is_admin:false, is_active:false };
+      applyAccessUI();
+      populateDropdowns();
+      renderProjectsTable();
+      renderCategoriesTable();
+      renderTransactionsTable();
+      renderDashboard();
+      if (currentUser.is_admin) renderUsersTable();
+      const status = document.getElementById('appStatus');
+      status.className = 'alert alert-success py-2 px-3 small mb-3';
+      status.textContent = `Loaded ${store.projects.length} project(s), ${store.categories.length} categor${store.categories.length === 1 ? 'y' : 'ies'}, ${store.income.length} income transaction(s), and ${store.expenses.length} expense transaction(s).`;
+      setLoading(false);
+    })
+    .withFailureHandler(handleFailure)
+    .getAllData();
+}
+
+function switchTab(tabId, element) {
+  document.querySelectorAll('.section-view').forEach(e => e.style.display = 'none');
+  document.querySelectorAll('.nav-link').forEach(e => e.classList.remove('active'));
+  document.getElementById(tabId).style.display = 'block';
+  element.classList.add('active');
+  if (tabId === 'dashboardTab') renderDashboard();
+  if (tabId === 'usersTab' && currentUser.is_admin) refreshUsersList();
+}
+
+function populateDropdowns() {
+  const dash = document.getElementById('dashProjectSlicer');
+  const catProject = document.getElementById('catProjectId');
+  const catAddProject = document.getElementById('catAddProjectId');
+  const transProject = document.getElementById('transProjectId');
+  const trxFilter = document.getElementById('trxProjectFilter');
+  const currentDash = dash.value;
+  const currentFilter = trxFilter.value;
+
+  dash.innerHTML = '<option value="">All Projects</option>';
+  trxFilter.innerHTML = '<option value="">All Projects</option>';
+  catProject.innerHTML = '<option value="">Select Project</option>';
+  catAddProject.innerHTML = '<option value="">Select Project</option>';
+  transProject.innerHTML = '<option value="">Select Project</option>';
+
+  [...store.projects].sort((a,b) => String(a.title || '').localeCompare(String(b.title || ''))).forEach(p => {
+    const id = String(p.project_id ?? '');
+    if (!id) return;
+    dash.add(new Option(p.title || `Project ${id}`, id));
+    trxFilter.add(new Option(p.title || `Project ${id}`, id));
+    catProject.add(new Option(p.title || `Project ${id}`, id));
+    catAddProject.add(new Option(p.title || `Project ${id}`, id));
+    transProject.add(new Option(p.title || `Project ${id}`, id));
+  });
+
+  if ([...dash.options].some(o => o.value === currentDash)) dash.value = currentDash;
+  if ([...trxFilter.options].some(o => o.value === currentFilter)) trxFilter.value = currentFilter;
+}
+
+function filterTransactionCategories(selectedCategoryId = '') {
+  const projectId = document.getElementById('transProjectId').value;
+  const select = document.getElementById('transCategoryId');
+  select.innerHTML = '<option value="">Select Category</option>';
+
+  store.categories
+    .filter(c => String(c.project_id) === String(projectId))
+    .sort((a,b) => String(a.title || '').localeCompare(String(b.title || '')))
+    .forEach(c => {
+      const flow = normalizeFlow(c.flow_type) || 'Unknown';
+      const option = new Option(`${c.title || 'Untitled'} — ${flow}`, c.category_id);
+      option.dataset.flowType = flow;
+      select.add(option);
+    });
+
+  if (selectedCategoryId && [...select.options].some(o => String(o.value) === String(selectedCategoryId))) {
+    select.value = String(selectedCategoryId);
+  }
+  updateTransactionFlowHint();
+}
+
+function updateTransactionFlowHint() {
+  const category = getCategory(document.getElementById('transCategoryId').value);
+  const hint = document.getElementById('transFlowHint');
+  if (!category) {
+    hint.textContent = 'The selected category determines whether this is saved to Income or Expenses.';
+    return;
+  }
+  const flow = normalizeFlow(category.flow_type);
+  hint.textContent = flow ? `This transaction will be saved to the ${flow === 'Income' ? 'Income' : 'Expenses'} sheet.` : 'This category has an invalid Flow Type.';
+}
+
+function renderProjectsTable() {
+  const tbody = document.getElementById('projectsTableBody');
+  if (!store.projects.length) return setEmptyRow(tbody, 8, 'No projects yet.');
+
+  tbody.innerHTML = store.projects.map(p => `
+    <tr>
+      <td>${esc(p.project_id)}</td>
+      <td><strong>${esc(p.title)}</strong></td>
+      <td class="money">${p.amount_goal === '' || p.amount_goal == null ? '<span class="text-secondary">—</span>' : money(p.amount_goal)}</td>
+      <td class="audit-cell">${esc(p.date_created || '—')}</td>
+      <td class="audit-cell">${esc(p.created_by || '—')}</td>
+      <td class="audit-cell">${esc(p.date_updated || '—')}</td>
+      <td class="audit-cell">${esc(p.updated_by || '—')}</td>
+      <td>${canEditRecords() ? `<button class="btn btn-sm btn-outline-primary" onclick="editProject(${Number(p._rowNum)})"><i class="bi bi-pencil"></i></button>` : '<span class="text-secondary small">Read only</span>'}</td>
+    </tr>`).join('');
+}
+
+function renderCategoriesTable() {
+  const tbody = document.getElementById('categoriesTableBody');
+  if (!store.categories.length) return setEmptyRow(tbody, 10, 'No categories yet.');
+
+  tbody.innerHTML = store.categories.map(c => {
+    const flow = normalizeFlow(c.flow_type);
+    return `
+      <tr>
+        <td>${esc(c.category_id)}</td>
+        <td>${esc(getProjectName(c.project_id))}</td>
+        <td><strong>${esc(c.title)}</strong></td>
+        <td>${flowBadge(flow)}</td>
+        <td>${esc(c.description || '—')}</td>
+        <td class="audit-cell">${esc(c.date_created || '—')}</td>
+        <td class="audit-cell">${esc(c.created_by || '—')}</td>
+        <td class="audit-cell">${esc(c.date_updated || '—')}</td>
+        <td class="audit-cell">${esc(c.updated_by || '—')}</td>
+        <td>${canEditRecords() ? `<button class="btn btn-sm btn-outline-primary" onclick="editCategory(${Number(c._rowNum)})"><i class="bi bi-pencil"></i></button>` : '<span class="text-secondary small">Read only</span>'}</td>
+      </tr>`;
+  }).join('');
+}
+
+function renderTransactionsTable() {
+  const tbody = document.getElementById('transactionsTableBody');
+  const projectFilter = document.getElementById('trxProjectFilter').value;
+  const typeFilter = document.getElementById('trxTypeFilter').value;
+  const search = document.getElementById('trxSearch').value.trim().toLowerCase();
+
+  let rows = getCombinedTransactions();
+  if (projectFilter) rows = rows.filter(t => String(t.project_id) === String(projectFilter));
+  if (typeFilter) rows = rows.filter(t => t.flow_type === typeFilter);
+  if (search) rows = rows.filter(t => `${getCategoryName(t.category_id)} ${t.remarks || ''}`.toLowerCase().includes(search));
+
+  if (!rows.length) return setEmptyRow(tbody, 11, 'No matching transactions.');
+
+  tbody.innerHTML = rows.map(t => `
+    <tr>
+      <td>${flowBadge(t.flow_type)}</td>
+      <td>${esc(getProjectName(t.project_id))}</td>
+      <td>${esc(getCategoryName(t.category_id))}</td>
+      <td>${esc(t.date || '')}</td>
+      <td class="money fw-semibold">${money(t.amount)}</td>
+      <td>${esc(t.remarks || '—')}</td>
+      <td class="audit-cell">${esc(t.date_created || '—')}</td>
+      <td class="audit-cell">${esc(t.created_by || '—')}</td>
+      <td class="audit-cell">${esc(t.date_updated || '—')}</td>
+      <td class="audit-cell">${esc(t.updated_by || '—')}</td>
+      <td>${canEditRecords() ? `<button class="btn btn-sm btn-outline-primary" onclick="editTransaction('${t._sheet}', ${Number(t._rowNum)})"><i class="bi bi-pencil"></i></button>` : '<span class="text-secondary small">Read only</span>'}</td>
+    </tr>`).join('');
+}
+
+function renderDashboard() {
+  const projectId = document.getElementById('dashProjectSlicer').value;
+  const projects = projectId ? store.projects.filter(p => String(p.project_id) === String(projectId)) : store.projects;
+  const income = projectId ? store.income.filter(t => String(t.project_id) === String(projectId)) : store.income;
+  const expenses = projectId ? store.expenses.filter(t => String(t.project_id) === String(projectId)) : store.expenses;
+
+  const goal = sum(projects, 'amount_goal');
+  const totalIncome = sum(income, 'amount');
+  const totalExpenses = sum(expenses, 'amount');
+  const balance = totalIncome - totalExpenses;
+
+  document.getElementById('kpiGoal').textContent = money(goal);
+  document.getElementById('kpiIncome').textContent = money(totalIncome);
+  document.getElementById('kpiExpenses').textContent = money(totalExpenses);
+  document.getElementById('kpiBalance').textContent = money(balance);
+
+  const pct = goal > 0 ? (totalIncome / goal) * 100 : 0;
+  const cappedPct = Math.max(0, Math.min(100, pct));
+  document.getElementById('goalProgressBar').style.width = cappedPct + '%';
+  document.getElementById('goalProgressPercent').textContent = goal > 0 ? `${pct.toFixed(1)}%` : 'No goal';
+  document.getElementById('goalProgressText').textContent = goal > 0
+    ? `${money(totalIncome)} of ${money(goal)} income goal${totalIncome < goal ? ` • ${money(goal - totalIncome)} remaining` : ' • goal reached'}`
+    : 'No amount goal is set for the selected project scope.';
+
+  const incomeSummary = buildCategorySummary('Income', income, projectId);
+  const expenseSummary = buildCategorySummary('Expense', expenses, projectId);
+  renderSummaryTable('incomeSummaryBody', incomeSummary);
+  renderSummaryTable('expenseSummaryBody', expenseSummary);
+  renderCategoryChart('incomeCategoryChart', incomeSummary, 'Income');
+  renderCategoryChart('expenseCategoryChart', expenseSummary, 'Expenses');
+  renderCashFlowChart(income, expenses);
+}
+
+function buildCategorySummary(flowType, transactions, selectedProjectId) {
+  const categories = store.categories.filter(c => {
+    const sameProject = !selectedProjectId || String(c.project_id) === String(selectedProjectId);
+    return sameProject && normalizeFlow(c.flow_type) === flowType;
+  });
+
+  const totals = new Map();
+  transactions.forEach(t => totals.set(String(t.category_id), (totals.get(String(t.category_id)) || 0) + num(t.amount)));
+
+  const totalAll = transactions.reduce((s,t) => s + num(t.amount), 0);
+  return categories.map(c => ({
+    category_id: c.category_id,
+    label: selectedProjectId ? (c.title || 'Untitled') : `${getProjectName(c.project_id)} — ${c.title || 'Untitled'}`,
+    amount: totals.get(String(c.category_id)) || 0,
+    percent: totalAll > 0 ? ((totals.get(String(c.category_id)) || 0) / totalAll) * 100 : 0
+  })).sort((a,b) => b.amount - a.amount || a.label.localeCompare(b.label));
+}
+
+function renderSummaryTable(bodyId, rows) {
+  const tbody = document.getElementById(bodyId);
+  if (!rows.length) return setEmptyRow(tbody, 3, 'No categories configured.');
+  tbody.innerHTML = rows.map(r => `<tr><td>${esc(r.label)}</td><td class="money">${money(r.amount)}</td><td>${r.percent.toFixed(1)}%</td></tr>`).join('');
+}
+
+function renderCategoryChart(canvasId, rows, label) {
+  destroyChart(canvasId);
+  const canvas = document.getElementById(canvasId);
+  const active = rows.filter(r => r.amount > 0);
+
+  charts[canvasId] = new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels: active.length ? active.map(r => r.label) : ['No data'],
+      datasets: [{ label, data: active.length ? active.map(r => r.amount) : [1] }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12 } },
+        tooltip: { callbacks: { label: ctx => active.length ? `${ctx.label}: ${money(ctx.raw)}` : 'No transactions' } }
+      }
+    }
+  });
+}
+
+function renderCashFlowChart(income, expenses) {
+  const monthly = {};
+  [...income, ...expenses].forEach(t => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(t.date || ''))) return;
+    const month = String(t.date).slice(0,7);
+    if (!monthly[month]) monthly[month] = { income: 0, expense: 0 };
+  });
+  income.forEach(t => { const m = String(t.date || '').slice(0,7); if (monthly[m]) monthly[m].income += num(t.amount); });
+  expenses.forEach(t => { const m = String(t.date || '').slice(0,7); if (monthly[m]) monthly[m].expense += num(t.amount); });
+
+  const months = Object.keys(monthly).sort().slice(-12);
+  destroyChart('cashFlowChart');
+  charts.cashFlowChart = new Chart(document.getElementById('cashFlowChart'), {
+    type: 'bar',
+    data: {
+      labels: months.length ? months.map(formatMonth) : ['No data'],
+      datasets: [
+        { label: 'Income', data: months.length ? months.map(m => monthly[m].income) : [0] },
+        { label: 'Expenses', data: months.length ? months.map(m => monthly[m].expense) : [0] }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true, ticks: { callback: value => compactMoney(value) } } },
+      plugins: { tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${money(ctx.raw)}` } } }
+    }
+  });
+}
+
+function openProjectModal() {
+  if (!canAddRecords()) return showToast('You do not have permission to add records.', true);
+  document.getElementById('projectForm').reset();
+  document.getElementById('projRowNum').value = '';
+  document.getElementById('projId').value = '';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('projectModal')).show();
+}
+
+function editProject(rowNum) {
+  if (!canEditRecords()) return showToast('You do not have permission to edit records.', true);
+  const p = store.projects.find(x => Number(x._rowNum) === Number(rowNum));
+  if (!p) return;
+  document.getElementById('projRowNum').value = p._rowNum;
+  document.getElementById('projId').value = p.project_id ?? '';
+  document.getElementById('projTitle').value = p.title ?? '';
+  document.getElementById('projAmountGoal').value = p.amount_goal ?? '';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('projectModal')).show();
+}
+
+function handleProjectSave(e) {
+  e.preventDefault();
+  const payload = {
+    _rowNum: document.getElementById('projRowNum').value,
+    project_id: document.getElementById('projId').value,
+    title: document.getElementById('projTitle').value,
+    amount_goal: document.getElementById('projAmountGoal').value
+  };
+  runSave('saveProject', payload, 'projectModal', 'Project saved.');
+}
+
+function openCategoryAddModal() {
+  if (!canAddRecords()) return showToast('You do not have permission to add records.', true);
+  document.getElementById('categoryAddForm').reset();
+  document.getElementById('categoryBatchRows').innerHTML = '';
+  addCategoryEntryRow();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('categoryAddModal')).show();
+}
+
+function addCategoryEntryRow(title = '', description = '') {
+  const tbody = document.getElementById('categoryBatchRows');
+  const tr = document.createElement('tr');
+  tr.className = 'category-entry-row';
+  tr.innerHTML = `
+    <td><input type="text" class="form-control form-control-sm category-batch-title" maxlength="150" required value="${esc(title)}"></td>
+    <td><input type="text" class="form-control form-control-sm category-batch-description" maxlength="500" value="${esc(description)}"></td>
+    <td class="category-entry-actions"><button type="button" class="btn btn-sm btn-outline-danger category-remove-btn" onclick="removeCategoryEntryRow(this)" title="Remove row"><i class="bi bi-x-lg"></i></button></td>`;
+  tbody.appendChild(tr);
+  updateCategoryRemoveButtons();
+  tr.querySelector('.category-batch-title').focus();
+}
+
+function removeCategoryEntryRow(button) {
+  const row = button.closest('tr');
+  if (row) row.remove();
+  if (!document.querySelector('#categoryBatchRows .category-entry-row')) addCategoryEntryRow();
+  updateCategoryRemoveButtons();
+}
+
+function updateCategoryRemoveButtons() {
+  const rows = [...document.querySelectorAll('#categoryBatchRows .category-entry-row')];
+  rows.forEach(row => {
+    const btn = row.querySelector('.category-remove-btn');
+    if (btn) btn.disabled = rows.length <= 1;
+  });
+}
+
+function handleCategoryBatchSave(e) {
+  e.preventDefault();
+  const rows = [...document.querySelectorAll('#categoryBatchRows .category-entry-row')].map((row, index) => ({
+    index,
+    title: row.querySelector('.category-batch-title').value.trim(),
+    description: row.querySelector('.category-batch-description').value.trim()
+  })).filter(r => r.title || r.description);
+
+  if (!rows.length) return showToast('Add at least one category.', true);
+  const invalid = rows.find(r => !r.title);
+  if (invalid) return showToast(`Category is required on row ${invalid.index + 1}.`, true);
+
+  const payload = {
+    project_id: document.getElementById('catAddProjectId').value,
+    flow_type: document.getElementById('catAddFlowType').value,
+    rows: rows.map(r => ({ title: r.title, description: r.description }))
+  };
+
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(result => {
+      const records = result && Array.isArray(result.records) ? result.records : [];
+      store.categories.push(...records);
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('categoryAddModal')).hide();
+      renderCategoriesTable();
+      renderTransactionsTable();
+      renderDashboard();
+      setLoading(false);
+      showToast(`${records.length} categor${records.length === 1 ? 'y' : 'ies'} saved.`, false);
+    })
+    .withFailureHandler(handleFailure)
+    .saveCategoriesBatch(payload);
+}
+
+function editCategory(rowNum) {
+  if (!canEditRecords()) return showToast('You do not have permission to edit records.', true);
+  const c = store.categories.find(x => Number(x._rowNum) === Number(rowNum));
+  if (!c) return;
+  document.getElementById('catRowNum').value = c._rowNum;
+  document.getElementById('catId').value = c.category_id ?? '';
+  document.getElementById('catProjectId').value = c.project_id ?? '';
+  document.getElementById('catTitle').value = c.title ?? '';
+  document.getElementById('catFlowType').value = normalizeFlow(c.flow_type) || 'Expense';
+  document.getElementById('catDescription').value = c.description ?? '';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('categoryModal')).show();
+}
+
+function handleCategorySave(e) {
+  e.preventDefault();
+  const payload = {
+    _rowNum: document.getElementById('catRowNum').value,
+    category_id: document.getElementById('catId').value,
+    project_id: document.getElementById('catProjectId').value,
+    title: document.getElementById('catTitle').value,
+    flow_type: document.getElementById('catFlowType').value,
+    description: document.getElementById('catDescription').value
+  };
+  runSave('saveCategory', payload, 'categoryModal', 'Category saved.');
+}
+
+function openTransactionModal() {
+  if (!canAddRecords()) return showToast('You do not have permission to add records.', true);
+  document.getElementById('transactionForm').reset();
+  document.getElementById('transRowNum').value = '';
+  document.getElementById('transSourceSheet').value = '';
+  document.getElementById('transId').value = '';
+  document.getElementById('transDate').value = todayLocal();
+  filterTransactionCategories();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('transactionModal')).show();
+}
+
+function editTransaction(sheetName, rowNum) {
+  if (!canEditRecords()) return showToast('You do not have permission to edit records.', true);
+  const list = sheetName === 'Income' ? store.income : store.expenses;
+  const t = list.find(x => Number(x._rowNum) === Number(rowNum));
+  if (!t) return;
+
+  document.getElementById('transRowNum').value = t._rowNum;
+  document.getElementById('transSourceSheet').value = sheetName;
+  document.getElementById('transId').value = t.transaction_id ?? '';
+  document.getElementById('transProjectId').value = t.project_id ?? '';
+  filterTransactionCategories(t.category_id);
+  document.getElementById('transDate').value = t.date ?? '';
+  document.getElementById('transAmount').value = t.amount ?? '';
+  document.getElementById('transRemarks').value = t.remarks ?? '';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('transactionModal')).show();
+}
+
+function handleTransactionSave(e) {
+  e.preventDefault();
+  const payload = {
+    _rowNum: document.getElementById('transRowNum').value,
+    _sourceSheet: document.getElementById('transSourceSheet').value,
+    transaction_id: document.getElementById('transId').value,
+    project_id: document.getElementById('transProjectId').value,
+    category_id: document.getElementById('transCategoryId').value,
+    date: document.getElementById('transDate').value,
+    amount: document.getElementById('transAmount').value,
+    remarks: document.getElementById('transRemarks').value
+  };
+  runSave('saveTransaction', payload, 'transactionModal', 'Transaction saved.');
+}
+
+function runSave(serverFunction, payload, modalId, successMessage) {
+  setLoading(true);
+  const runner = google.script.run
+    .withSuccessHandler(result => {
+      bootstrap.Modal.getOrCreateInstance(document.getElementById(modalId)).hide();
+      applySaveResult(serverFunction, result);
+      setLoading(false);
+      showToast(successMessage, false);
+    })
+    .withFailureHandler(handleFailure);
+
+  if (serverFunction === 'saveProject') runner.saveProject(payload);
+  else if (serverFunction === 'saveCategory') runner.saveCategory(payload);
+  else if (serverFunction === 'saveTransaction') runner.saveTransaction(payload);
+  else handleFailure(new Error('Unknown save operation.'));
+}
+
+function applySaveResult(serverFunction, result) {
+  if (!result || !result.record) return;
+
+  if (serverFunction === 'saveProject') {
+    upsertStoreRecord('projects', result.record);
+    populateDropdowns();
+    renderProjectsTable();
+    renderCategoriesTable();
+    renderTransactionsTable();
+    renderDashboard();
+    return;
+  }
+
+  if (serverFunction === 'saveCategory') {
+    upsertStoreRecord('categories', result.record);
+    renderCategoriesTable();
+    renderTransactionsTable();
+    renderDashboard();
+    return;
+  }
+
+  if (serverFunction === 'saveTransaction') {
+    applyTransactionSaveResult(result);
+    renderTransactionsTable();
+    renderDashboard();
+  }
+}
+
+function upsertStoreRecord(collectionName, record) {
+  const list = store[collectionName] || (store[collectionName] = []);
+  let index = list.findIndex(x => Number(x._rowNum) === Number(record._rowNum));
+
+  if (index < 0) {
+    const idField = collectionName === 'projects' ? 'project_id'
+      : collectionName === 'categories' ? 'category_id'
+      : collectionName === 'authorizedUsers' ? 'email'
+      : 'transaction_id';
+    index = list.findIndex(x => String(x[idField] ?? '') === String(record[idField] ?? ''));
+  }
+
+  if (index >= 0) list[index] = { ...list[index], ...record };
+  else list.push(record);
+}
+
+function applyTransactionSaveResult(result) {
+  const targetCollection = result.targetSheet === 'Income' ? 'income' : 'expenses';
+
+  if (result.action === 'moved' && result.sourceSheet && result.sourceRow) {
+    const sourceCollection = result.sourceSheet === 'Income' ? 'income' : 'expenses';
+    store[sourceCollection] = (store[sourceCollection] || [])
+      .filter(x => Number(x._rowNum) !== Number(result.sourceRow))
+      .map(x => Number(x._rowNum) > Number(result.sourceRow) ? { ...x, _rowNum: Number(x._rowNum) - 1 } : x);
+  }
+
+  upsertStoreRecord(targetCollection, result.record);
+}
+
+function canAddRecords() { return !!(currentUser && currentUser.is_active && (currentUser.can_add || currentUser.is_admin)); }
+function canEditRecords() { return !!(currentUser && currentUser.is_active && (currentUser.can_edit || currentUser.is_admin)); }
+
+function applyAccessUI() {
+  document.getElementById('currentUserEmail').textContent = currentUser.email || 'Unknown user';
+  const badges = [];
+  if (!currentUser.is_active) badges.push('<span class="badge text-bg-danger permission-badge">Disabled</span>');
+  else if (currentUser.is_admin) badges.push('<span class="badge text-bg-primary permission-badge">Administrator</span>');
+  else {
+    if (currentUser.can_add) badges.push('<span class="badge text-bg-success permission-badge">Add</span>');
+    if (currentUser.can_edit) badges.push('<span class="badge text-bg-info permission-badge">Edit</span>');
+    if (!currentUser.can_add && !currentUser.can_edit) badges.push('<span class="badge text-bg-secondary permission-badge">Read Only</span>');
+  }
+  document.getElementById('currentUserAccess').innerHTML = badges.join(' ');
+  document.getElementById('usersNavItem').classList.toggle('d-none', !currentUser.is_admin);
+  document.getElementById('btnAddProject').classList.toggle('d-none', !canAddRecords());
+  document.getElementById('btnAddCategory').classList.toggle('d-none', !canAddRecords());
+  document.getElementById('btnAddTransaction').classList.toggle('d-none', !canAddRecords());
+}
+
+function boolBadge(value, yesLabel='Yes', noLabel='No') {
+  return value ? `<span class="badge text-bg-success">${yesLabel}</span>` : `<span class="badge text-bg-light text-secondary border">${noLabel}</span>`;
+}
+
+function renderUsersTable() {
+  const tbody = document.getElementById('usersTableBody');
+  if (!currentUser.is_admin) return setEmptyRow(tbody, 10, 'Administrator access required.');
+  const rows = store.authorizedUsers || [];
+  if (!rows.length) return setEmptyRow(tbody, 10, 'No authorized users yet.');
+  tbody.innerHTML = [...rows].sort((a,b) => String(a.email).localeCompare(String(b.email))).map(u => `
+    <tr>
+      <td><strong>${esc(u.email)}</strong></td>
+      <td>${boolBadge(!!u.can_add)}</td>
+      <td>${boolBadge(!!u.can_edit)}</td>
+      <td>${boolBadge(!!u.is_admin, 'Admin', 'No')}</td>
+      <td>${boolBadge(!!u.is_active, 'Active', 'Inactive')}</td>
+      <td class="audit-cell">${esc(u.date_created || '—')}</td>
+      <td class="audit-cell">${esc(u.created_by || '—')}</td>
+      <td class="audit-cell">${esc(u.date_updated || '—')}</td>
+      <td class="audit-cell">${esc(u.updated_by || '—')}</td>
+      <td><button class="btn btn-sm btn-outline-primary" onclick="editUser(${Number(u._rowNum)})"><i class="bi bi-pencil"></i></button></td>
+    </tr>`).join('');
+}
+
+function refreshUsersList() {
+  if (!currentUser.is_admin) return;
+  google.script.run
+    .withSuccessHandler(users => { store.authorizedUsers = users || []; renderUsersTable(); })
+    .withFailureHandler(handleFailure)
+    .getUsersList();
+}
+
+function openUserModal() {
+  if (!currentUser.is_admin) return showToast('Administrator access required.', true);
+  document.getElementById('userForm').reset();
+  document.getElementById('userRowNum').value = '';
+  document.getElementById('userEmail').readOnly = false;
+  document.getElementById('userIsActive').checked = true;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('userModal')).show();
+}
+
+function editUser(rowNum) {
+  if (!currentUser.is_admin) return showToast('Administrator access required.', true);
+  const u = (store.authorizedUsers || []).find(x => Number(x._rowNum) === Number(rowNum));
+  if (!u) return;
+  document.getElementById('userRowNum').value = u._rowNum;
+  document.getElementById('userEmail').value = u.email || '';
+  document.getElementById('userEmail').readOnly = true;
+  document.getElementById('userCanAdd').checked = !!u.can_add;
+  document.getElementById('userCanEdit').checked = !!u.can_edit;
+  document.getElementById('userIsAdmin').checked = !!u.is_admin;
+  document.getElementById('userIsActive').checked = !!u.is_active;
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('userModal')).show();
+}
+
+function handleUserSave(e) {
+  e.preventDefault();
+  if (!currentUser.is_admin) return showToast('Administrator access required.', true);
+  const payload = {
+    _rowNum: document.getElementById('userRowNum').value,
+    email: document.getElementById('userEmail').value,
+    can_add: document.getElementById('userCanAdd').checked,
+    can_edit: document.getElementById('userCanEdit').checked,
+    is_admin: document.getElementById('userIsAdmin').checked,
+    is_active: document.getElementById('userIsActive').checked
+  };
+  setLoading(true);
+  google.script.run
+    .withSuccessHandler(result => {
+      if (result && result.record) upsertStoreRecord('authorizedUsers', result.record);
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('userModal')).hide();
+      renderUsersTable();
+      setLoading(false);
+      showToast('User saved.', false);
+    })
+    .withFailureHandler(handleFailure)
+    .saveAuthorizedUser(payload);
+}
+
+function getCombinedTransactions() {
+  return [
+    ...store.income.map(t => ({ ...t, flow_type: 'Income', _sheet: 'Income' })),
+    ...store.expenses.map(t => ({ ...t, flow_type: 'Expense', _sheet: 'Expenses' }))
+  ].sort((a,b) => String(b.date || '').localeCompare(String(a.date || '')) || Number(b._rowNum) - Number(a._rowNum));
+}
+
+function getProjectName(id) {
+  const p = store.projects.find(x => String(x.project_id) === String(id));
+  return p ? p.title : (id || 'Unknown Project');
+}
+function getCategory(id) { return store.categories.find(x => String(x.category_id) === String(id)); }
+function getCategoryName(id) { const c = getCategory(id); return c ? c.title : (id || 'Unknown Category'); }
+function normalizeFlow(v) { const s = String(v || '').trim().toLowerCase(); return s === 'income' ? 'Income' : (s === 'expense' || s === 'expenses' ? 'Expense' : ''); }
+function flowBadge(flow) { return flow === 'Income' ? '<span class="badge text-bg-success">Income</span>' : flow === 'Expense' ? '<span class="badge text-bg-danger">Expense</span>' : '<span class="badge text-bg-secondary">Unknown</span>'; }
+function sum(rows, field) { return rows.reduce((s,r) => s + num(r[field]), 0); }
+function num(v) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+function money(v) { return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', minimumFractionDigits: 2 }).format(num(v)); }
+function compactMoney(v) { return '₱' + new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(num(v)); }
+function formatMonth(ym) { const [y,m] = ym.split('-').map(Number); return new Intl.DateTimeFormat('en', { month:'short', year:'numeric' }).format(new Date(y, m-1, 1)); }
+function todayLocal() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); }
+function esc(value) { return String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+function setEmptyRow(tbody, colspan, message) { tbody.innerHTML = `<tr><td colspan="${colspan}" class="empty-row">${esc(message)}</td></tr>`; }
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+function setLoading(show) { document.getElementById('loadingCover').style.display = show ? 'flex' : 'none'; }
+function showToast(message, isError) { document.getElementById('toastTitle').textContent = isError ? 'Error' : 'Budget Tracker'; document.getElementById('toastBody').textContent = message; bootstrap.Toast.getOrCreateInstance(document.getElementById('appToast')).show(); }
+function handleFailure(error) {
+  setLoading(false);
+  const message = error && error.message ? error.message : String(error || 'Unexpected error.');
+  const status = document.getElementById('appStatus');
+  if (status) {
+    status.className = 'alert alert-danger py-2 px-3 small mb-3';
+    status.textContent = 'Data load failed: ' + message;
+  }
+  showToast(message, true);
+}
+</script>
+</body>
+</html>
