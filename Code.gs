@@ -1,5 +1,8 @@
+/**
+ * https://docs.google.com/spreadsheets/d/THIS_IS_YOUR_SPREADSHEET_ID/
+ */
 const APP_CONFIG = {
-  spreadsheetId: '1OJzDju0wDIf2vYRZeN0h71QcNgydn6THK_R5M1lkKlw',
+  spreadsheetId: 'PASTE_YOUR_SHEET_HERE',
   sheets: {
     projects: 'Projects',
     categories: 'Categories',
@@ -26,7 +29,7 @@ function getSpreadsheet_() {
 function doGet() {
   return HtmlService.createTemplateFromFile('Index')
     .evaluate()
-    .setTitle('Bularit ES - Budget Management System')
+    .setTitle('School - Budget Management System')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
