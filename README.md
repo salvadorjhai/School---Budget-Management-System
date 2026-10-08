@@ -1,3 +1,4 @@
+
 # School - Budget Management System (Appscript)
 not another budget management system . ;p
 
@@ -70,4 +71,7 @@ yes, single for private access and use .
 <br>
 pwede pero need mo ishare yung google sheet ; publicly or by selected google users .
 </details>
+
+![mobile layout](https://github.com/salvadorjhai/School---Budget-Management-System/blob/main/res/1.png?raw=true) ![mobile layout](https://github.com/salvadorjhai/School---Budget-Management-System/blob/main/res/2.png?raw=true) 
+![mobile layout](https://github.com/salvadorjhai/School---Budget-Management-System/blob/main/res/3.png?raw=true)
 
