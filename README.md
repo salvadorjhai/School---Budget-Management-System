@@ -1,6 +1,9 @@
 # School - Budget Management System (Appscript)
 not another budget management system . ;p
 
+# Disclaimer
+Under the Department of Education guidelines—most recently reiterated through DepEd Memorandum No. 41, s. 2024 and DepEd Order No. 19, s. 2008—the agency strictly prohibits collecting any fees or contributions from students and teachers during enrollment and throughout the school year.
+
 ## Files:
 - Code.gs       : server-side Google Apps Script
 - Index.html    : dashboard / forms / tables / charts
